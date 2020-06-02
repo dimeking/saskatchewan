@@ -1,83 +1,111 @@
-CREATE TABLE public.artists (
-	artistid varchar(256) NOT NULL,
-	name varchar(256),
-	location varchar(256),
-	lattitude numeric(18,0),
-	longitude numeric(18,0)
-);
+## CREATE TABLES
 
-CREATE TABLE public.songplays (
-	playid varchar(32) NOT NULL,
-	start_time timestamp NOT NULL,
-	userid int4 NOT NULL,
-	"level" varchar(256),
-	songid varchar(256),
-	artistid varchar(256),
-	sessionid int4,
-	location varchar(256),
-	user_agent varchar(256),
-	CONSTRAINT songplays_pkey PRIMARY KEY (playid)
-);
+# store raw data from log_data JSON files on S3 onto staging_events_table 
+staging_events_table_create= ("""
+DROP TABLE IF EXISTS staging_events_table;
+CREATE TABLE IF NOT EXISTS staging_events_table (
+    artist varchar, 
+    auth varchar, 
+    firstName varchar, 
+    gender varchar, 
+    itemInSession int, 
+    lastName varchar,
+    length real, 
+    level varchar, 
+    location varchar, 
+    method varchar, 
+    page varchar, 
+    registration bigint,
+    sessionId bigint,
+    song varchar, 
+    status int, 
+    ts bigint, 
+    userAgent varchar(512), 
+    userId bigint
+) DISTKEY(artist); 
+""")
 
-CREATE TABLE public.songs (
-	songid varchar(256) NOT NULL,
-	title varchar(256),
-	artistid varchar(256),
-	"year" int4,
-	duration numeric(18,0),
-	CONSTRAINT songs_pkey PRIMARY KEY (songid)
-);
+# store raw data from song_data JSON files on S3 onto staging_songs_table 
+staging_songs_table_create = ("""
+DROP TABLE IF EXISTS staging_songs_table;
+CREATE TABLE IF NOT EXISTS staging_songs_table (
+    song_id varchar, 
+    title varchar(512), 
+    num_songs int, 
+    year int, 
+    duration real, 
+    artist_id varchar, 
+    artist_name varchar(512), 
+    artist_location varchar(512), 
+    artist_latitude real, 
+    artist_longitude real
+) DISTKEY(artist_id) SORTKEY(song_id); 
+""")
 
-CREATE TABLE public.staging_events (
-	artist varchar(256),
-	auth varchar(256),
-	firstname varchar(256),
-	gender varchar(256),
-	iteminsession int4,
-	lastname varchar(256),
-	length numeric(18,0),
-	"level" varchar(256),
-	location varchar(256),
-	"method" varchar(256),
-	page varchar(256),
-	registration numeric(18,0),
-	sessionid int4,
-	song varchar(256),
-	status int4,
-	ts int8,
-	useragent varchar(256),
-	userid int4
-);
+# records in log data associated with song plays i.e. records with page 'NextSong'
+# ensure that a user is using a single session at any particular time
+songplay_table_create = ("""
+DROP TABLE IF EXISTS songplays;
+CREATE TABLE IF NOT EXISTS songplays (
+    songplay_id int IDENTITY(1,1) PRIMARY KEY, 
+    start_time bigint NOT NULL, 
+    user_id bigint NOT NULL, 
+    song_id varchar, 
+    artist_id varchar, 
+    session_id bigint NOT NULL, 
+    location varchar, 
+    user_agent varchar(512), 
+    UNIQUE (start_time, user_id, session_id)
+) DISTKEY(artist_id) SORTKEY(songplay_id);
+""")
 
-CREATE TABLE public.staging_songs (
-	num_songs int4,
-	artist_id varchar(256),
-	artist_name varchar(256),
-	artist_latitude numeric(18,0),
-	artist_longitude numeric(18,0),
-	artist_location varchar(256),
-	song_id varchar(256),
-	title varchar(256),
-	duration numeric(18,0),
-	"year" int4
-);
+# users in the app
+user_table_create = ("""
+DROP TABLE IF EXISTS users;
+CREATE TABLE IF NOT EXISTS users (
+    user_id bigint PRIMARY KEY, 
+    first_name varchar, 
+    last_name varchar, 
+    gender varchar, 
+    level varchar
+) SORTKEY(user_id);
+""")
 
-CREATE TABLE public."time" (
-	start_time timestamp NOT NULL,
-	"hour" int4,
-	"day" int4,
-	week int4,
-	"month" varchar(256),
-	"year" int4,
-	weekday varchar(256),
-	CONSTRAINT time_pkey PRIMARY KEY (start_time)
-) ;
+# songs in music database
+song_table_create = ("""
+DROP TABLE IF EXISTS songs;
+CREATE TABLE IF NOT EXISTS songs (
+    song_id varchar PRIMARY KEY, 
+    title varchar(512), 
+    artist_id varchar, 
+    year int, 
+    duration real
+) DISTKEY(artist_id) SORTKEY(song_id);
+""")
 
-CREATE TABLE public.users (
-	userid int4 NOT NULL,
-	first_name varchar(256),
-	last_name varchar(256),
-	gender varchar(256),
-	"level" varchar(256),
-	CONSTRAINT users_pkey PRIMARY KEY (userid)
-);
+# artists in music database
+artist_table_create = ("""
+DROP TABLE IF EXISTS artists;
+CREATE TABLE IF NOT EXISTS artists (
+    artist_id varchar PRIMARY KEY, 
+    name varchar(512), 
+    location varchar(512), 
+    latitude real, 
+    longitude real
+) SORTKEY(artist_id);
+""")
+
+# timestamps of records in songplays broken down into specific units
+time_table_create = ("""
+DROP TABLE IF EXISTS times;
+CREATE TABLE IF NOT EXISTS times (
+    start_time bigint PRIMARY KEY, 
+    dt DATE NOT NULL, 
+    hour smallint NOT NULL, 
+    day smallint NOT NULL, 
+    week smallint NOT NULL, 
+    month smallint NOT NULL, 
+    year smallint NOT NULL, 
+    weekday boolean NOT NULL
+) SORTKEY(start_time);
+""")
