@@ -61,8 +61,8 @@ CREATE TABLE IF NOT EXISTS songplays (
 
 # users in the app
 user_table_create = ("""
-DROP TABLE IF EXISTS users;
-CREATE TABLE IF NOT EXISTS users (
+{}
+CREATE TABLE IF NOT EXISTS {} (
     user_id bigint PRIMARY KEY, 
     first_name varchar, 
     last_name varchar, 
@@ -97,8 +97,8 @@ CREATE TABLE IF NOT EXISTS artists (
 
 # timestamps of records in songplays broken down into specific units
 time_table_create = ("""
-DROP TABLE IF EXISTS times;
-CREATE TABLE IF NOT EXISTS times (
+{}
+CREATE TABLE IF NOT EXISTS {} (
     start_time bigint PRIMARY KEY, 
     dt DATE NOT NULL, 
     hour smallint NOT NULL, 
