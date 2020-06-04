@@ -1,9 +1,9 @@
 from datetime import datetime, timedelta
 import os
+import logging
 
 from airflow import DAG
 from airflow.operators.dummy_operator import DummyOperator
-from airflow.operators.postgres_operator import PostgresOperator
 from airflow.operators.subdag_operator import SubDagOperator
 
 from stage_redshift_subdag import get_stage_redshift_dag
@@ -14,8 +14,23 @@ from data_quality_subdag import get_data_quality_dag
 from helpers import SqlQueries
 from helpers import sql_tables
 
+
+# Connections aws_credentials & redshift are setup 
+# on AirFlow Admin Connections page and accessed via Hooks
 # AWS_KEY = os.environ.get('AWS_KEY')
 # AWS_SECRET = os.environ.get('AWS_SECRET')
+
+"""
+SETUP DAG
+    Configure DAG's with default paramters:
+    - The DAG does not have dependencies on past runs
+    - On failure, the task are retried 3 times
+    - Retries happen every 5 minutes
+    - Catchup is turned off
+    - Do not email on retry
+    - hourly schedule
+"""
+logging.info("SETUP DAG")
 
 default_args = {
     'owner': 'dend-hr',
@@ -38,8 +53,15 @@ dag = DAG(dag_name,
 # Operators & SubDAGs
 #
 
+logging.info("Operators & SubDAGs::")
+
+# dummy start operator
 start_operator = DummyOperator(task_id='Begin_execution',  dag=dag)
 
+#
+# SubDAG creates staging_events_table (if need be) and copies 
+# JSON files from  s3://udacity-dend/log_data to Amazon Redshift
+#
 stage_events_task_id = "Stage_events"
 stage_events_subdag_task = SubDagOperator(
     subdag=get_stage_redshift_dag(
@@ -59,6 +81,10 @@ stage_events_subdag_task = SubDagOperator(
     dag=dag
 )
 
+#
+# SubDAG creates staging_songs_table (if need be) and copies 
+# JSON files from  s3://udacity-dend/song_data to Amazon Redshift
+#
 stage_songs_task_id = "Stage_songs"
 stage_songs_subdag_task = SubDagOperator(
     subdag=get_stage_redshift_dag(
@@ -78,23 +104,10 @@ stage_songs_subdag_task = SubDagOperator(
     dag=dag
 )
 
-# create_stage_songs_table = PostgresOperator(
-#     task_id="create_stage_songs_table",
-#     dag=dag,
-#     postgres_conn_id="redshift",
-#     sql=sql_tables.staging_songs_table_create
-# )
-
-# stage_songs_to_redshift = StageToRedshiftOperator(
-#     task_id='Stage_songs',
-#     dag=dag,
-#     table="staging_songs_table",
-#     redshift_conn_id="redshift",
-#     aws_credentials_id="aws_credentials",
-#     s3_bucket="udacity-dend",
-#     s3_prefix="song_data"    
-# )
-
+#
+# SubDAG creates songplays facts table (if need be) 
+# from staging_songs_table & staging_events_table
+#
 load_songplays_task_id = "Load_songplays_fact_table"
 load_songplays_subdag_task = SubDagOperator(
     subdag=get_load_fact_dag(
@@ -111,6 +124,10 @@ load_songplays_subdag_task = SubDagOperator(
     dag=dag
 )
 
+#
+# SubDAG creates users dimension table (if need be) 
+# from staging_events_table
+#
 load_users_task_id = "Load_user_dim_table"
 load_users_subdag_task = SubDagOperator(
     subdag=get_load_dim_dag(
@@ -127,6 +144,10 @@ load_users_subdag_task = SubDagOperator(
     dag=dag
 )
 
+#
+# SubDAG creates times dimension table (if need be) 
+# from staging_events_table
+#
 load_times_task_id = "Load_time_dim_table"
 load_times_subdag_task = SubDagOperator(
     subdag=get_load_dim_dag(
@@ -143,6 +164,10 @@ load_times_subdag_task = SubDagOperator(
     dag=dag
 )
 
+#
+# SubDAG creates songs dimension table (if need be) 
+# from staging_songs_table
+#
 load_songs_task_id = "Load_song_dim_table"
 load_songs_subdag_task = SubDagOperator(
     subdag=get_load_dim_dag(
@@ -159,6 +184,10 @@ load_songs_subdag_task = SubDagOperator(
     dag=dag
 )
 
+#
+# SubDAG creates artists dimension table (if need be) 
+# from staging_artists_table
+#
 load_artists_task_id = "Load_artist_dim_table"
 load_artists_subdag_task = SubDagOperator(
     subdag=get_load_dim_dag(
@@ -175,7 +204,10 @@ load_artists_subdag_task = SubDagOperator(
     dag=dag
 )
 
-
+#
+# SubDAG runs data quality checks fo valid data
+# on all the tables
+#
 data_quality_task_id = "Run_data_quality_checks"
 data_quality_subdag_task = SubDagOperator(
     subdag=get_data_quality_dag(
@@ -188,30 +220,36 @@ data_quality_subdag_task = SubDagOperator(
     dag=dag
 )
 
+# dummy end operator
 end_operator = DummyOperator(task_id='Stop_execution',  dag=dag)
 
 #
 # Task Dependencies
 #
+logging.info("Begin_execution >> Stage_events >> Load_songplays_fact_table >> Load_user_dim_table >> Run_data_quality_checks >> Stop_execution")
+logging.info("Begin_execution >> Stage_events >> Load_songplays_fact_table >> Load_time_dim_table >> Run_data_quality_checks >> Stop_execution")
+logging.info("Begin_execution >> Stage_songs >> Load_songplays_fact_table >> Load_song_dim_table >> Run_data_quality_checks >> Stop_execution")
+logging.info("Begin_execution >> Stage_songs >> Load_songplays_fact_table >> Load_artist_dim_table >> Run_data_quality_checks >> Stop_execution")
+
+# kickoff by creating staging stables from S3 buckets
 start_operator >> stage_events_subdag_task
 start_operator >> stage_songs_subdag_task
 
+# load songplays facts table by joining events & songs staging tables
 stage_events_subdag_task >> load_songplays_subdag_task
 stage_songs_subdag_task >> load_songplays_subdag_task
 
+# load users, times, songs, artists dimension tables
 load_songplays_subdag_task >> load_users_subdag_task
 load_songplays_subdag_task >> load_times_subdag_task
 load_songplays_subdag_task >> load_songs_subdag_task
 load_songplays_subdag_task >> load_artists_subdag_task
 
-# stage_events_subdag_task >> load_users_subdag_task
-# stage_events_subdag_task >> load_times_subdag_task
-# stage_songs_subdag_task >> load_songs_subdag_task
-# stage_songs_subdag_task >> load_artists_subdag_task
-
+# do data quality checks on all the tables
 load_users_subdag_task >> data_quality_subdag_task
 load_times_subdag_task >> data_quality_subdag_task
 load_songs_subdag_task >> data_quality_subdag_task
 load_artists_subdag_task >> data_quality_subdag_task
 
+# end
 data_quality_subdag_task >> end_operator

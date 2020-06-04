@@ -5,8 +5,10 @@ from airflow.operators.postgres_operator import PostgresOperator
 
 from airflow.operators import LoadFactOperator
 
-# Returns a DAG which creates a table if it does not exist, and then proceeds
-# to load data into that table. 
+#
+# SubDAG creates songplays facts table (if need be) 
+# from staging_songs_table & staging_events_table
+#
 def get_load_fact_dag(
         parent_dag_name,
         task_id,
@@ -16,12 +18,18 @@ def get_load_fact_dag(
         create_sql,
         load_sql,
         *args, **kwargs):
-    
+
+    # inherit DAG parameters    
     dag = DAG(
         f"{parent_dag_name}.{task_id}",
         **kwargs
     )
     
+    action = 'Append data to' if append else 'Create data in'
+    logging.info(f"{action} {table} fact table")
+
+    # Drop Table if append mode is not enabled
+    # Create Table on Postgres Redshift with connection id from airflow
     sql_drop_table = f"DROP TABLE IF EXISTS {table};" if not append else ""
     sql_create_table = create_sql.format(sql_drop_table, table) 
     create_task = PostgresOperator(
@@ -31,6 +39,7 @@ def get_load_fact_dag(
         sql=sql_create_table
     )
 
+    # Enable Load Fact Operator to create fact tables from staging tables
     load_task = LoadFactOperator(
         task_id=f"load_{table}_fact_table",
         dag=dag,
@@ -40,7 +49,7 @@ def get_load_fact_dag(
         sql=load_sql
     )
 
-
+    # ensure load task is executed after create task
     create_task >> load_task
 
     return dag

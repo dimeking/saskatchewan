@@ -4,6 +4,10 @@ from airflow import DAG
 from airflow.operators.postgres_operator import PostgresOperator
 
 from airflow.operators import DataQualityOperator
+#
+# SubDAG runs data quality checks fo valid data
+# on all the tables
+#
 
 # Test Callables
 def test_has_rows(db, table):
@@ -20,10 +24,13 @@ def get_data_quality_dag(
         conn_id,
         *args, **kwargs):
     
+    # inherit DAG parameters
     dag = DAG(
         f"{parent_dag_name}.{task_id}",
         **kwargs
     )
+
+    logging.info("Run 'Has Rows' Test on all tables")
 
     # Test 'Has Rows' on staging_events_table 
     staging_events_test_has_rows_task = DataQualityOperator(
@@ -102,4 +109,5 @@ def get_data_quality_dag(
         table='artists'
     )
 
+    # Tests can run in parallel without task dependencies
     return dag
