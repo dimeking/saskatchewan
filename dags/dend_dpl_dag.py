@@ -53,8 +53,6 @@ dag = DAG(dag_name,
 # Operators & SubDAGs
 #
 
-logging.info("Operators & SubDAGs::")
-
 # dummy start operator
 start_operator = DummyOperator(task_id='Begin_execution',  dag=dag)
 
@@ -62,6 +60,7 @@ start_operator = DummyOperator(task_id='Begin_execution',  dag=dag)
 # SubDAG creates staging_events_table (if need be) and copies 
 # JSON files from  s3://udacity-dend/log_data to Amazon Redshift
 #
+logging.info("Copy json files from S3 (s3://udacity-dend/log_data) to staging_events_table on Redshift ")
 stage_events_task_id = "Stage_events"
 stage_events_subdag_task = SubDagOperator(
     subdag=get_stage_redshift_dag(
@@ -85,6 +84,7 @@ stage_events_subdag_task = SubDagOperator(
 # SubDAG creates staging_songs_table (if need be) and copies 
 # JSON files from  s3://udacity-dend/song_data to Amazon Redshift
 #
+logging.info("Copy json files from S3 (s3://udacity-dend/song_data) to staging_songs_table on Redshift ")
 stage_songs_task_id = "Stage_songs"
 stage_songs_subdag_task = SubDagOperator(
     subdag=get_stage_redshift_dag(
@@ -108,6 +108,8 @@ stage_songs_subdag_task = SubDagOperator(
 # SubDAG creates songplays facts table (if need be) 
 # from staging_songs_table & staging_events_table
 #
+logging.info("")
+logging.info("Populate songplays fact table on Redshift from staging stables")
 load_songplays_task_id = "Load_songplays_fact_table"
 load_songplays_subdag_task = SubDagOperator(
     subdag=get_load_fact_dag(
@@ -128,6 +130,7 @@ load_songplays_subdag_task = SubDagOperator(
 # SubDAG creates users dimension table (if need be) 
 # from staging_events_table
 #
+logging.info("Populate users dimension table on Redshift from staging stables")
 load_users_task_id = "Load_user_dim_table"
 load_users_subdag_task = SubDagOperator(
     subdag=get_load_dim_dag(
@@ -148,6 +151,7 @@ load_users_subdag_task = SubDagOperator(
 # SubDAG creates times dimension table (if need be) 
 # from staging_events_table
 #
+logging.info("Populate times dimension table on Redshift from staging stables")
 load_times_task_id = "Load_time_dim_table"
 load_times_subdag_task = SubDagOperator(
     subdag=get_load_dim_dag(
@@ -168,6 +172,7 @@ load_times_subdag_task = SubDagOperator(
 # SubDAG creates songs dimension table (if need be) 
 # from staging_songs_table
 #
+logging.info("Populate songs dimension table on Redshift from staging stables")
 load_songs_task_id = "Load_song_dim_table"
 load_songs_subdag_task = SubDagOperator(
     subdag=get_load_dim_dag(
@@ -188,6 +193,7 @@ load_songs_subdag_task = SubDagOperator(
 # SubDAG creates artists dimension table (if need be) 
 # from staging_artists_table
 #
+logging.info("Populate artists dimension table on Redshift from staging stables")
 load_artists_task_id = "Load_artist_dim_table"
 load_artists_subdag_task = SubDagOperator(
     subdag=get_load_dim_dag(
@@ -205,15 +211,28 @@ load_artists_subdag_task = SubDagOperator(
 )
 
 #
-# SubDAG runs data quality checks fo valid data
+# SubDAG runs data quality checks for valid data
 # on all the tables
 #
+tests = [
+        {"test_sql":" SELECT COUNT(*) from staging_events_table" , "expected_result":"8056", "id":"staging_events_table_count"} , 
+        {"test_sql":" SELECT COUNT(*) from staging_songs_table" , "expected_result":"14896", "id":"staging_songs_table_count"} , 
+        {"test_sql":" SELECT COUNT(*) from songplays" , "expected_result":"320", "id":"songplays_table_count"},
+        {"test_sql":" SELECT COUNT(*) from users" , "expected_result":"104", "id":"users_table_count"},
+        {"test_sql":" SELECT COUNT(*) from times" , "expected_result":"6813", "id":"times_table_count"},
+        {"test_sql":" SELECT COUNT(*) from songs" , "expected_result":"14896", "id":"songs_table_count"},
+        {"test_sql":" SELECT COUNT(*) from artists" , "expected_result":"10025", "id":"artists_table_count"}
+    ]
+
+logging.info("")
+logging.info("Run data quality checks over staging, fact & dimension tables ")
 data_quality_task_id = "Run_data_quality_checks"
 data_quality_subdag_task = SubDagOperator(
     subdag=get_data_quality_dag(
         parent_dag_name=dag_name,
         task_id=data_quality_task_id,
         conn_id="redshift",
+        tests=tests,
         default_args=default_args
     ),
     task_id=data_quality_task_id,
@@ -226,6 +245,7 @@ end_operator = DummyOperator(task_id='Stop_execution',  dag=dag)
 #
 # Task Dependencies
 #
+logging.info("")
 logging.info("Begin_execution >> Stage_events >> Load_songplays_fact_table >> Load_user_dim_table >> Run_data_quality_checks >> Stop_execution")
 logging.info("Begin_execution >> Stage_events >> Load_songplays_fact_table >> Load_time_dim_table >> Run_data_quality_checks >> Stop_execution")
 logging.info("Begin_execution >> Stage_songs >> Load_songplays_fact_table >> Load_song_dim_table >> Run_data_quality_checks >> Stop_execution")

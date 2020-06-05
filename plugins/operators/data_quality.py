@@ -15,18 +15,18 @@ class DataQualityOperator(BaseOperator):
     @apply_defaults
     def __init__(self,
                  conn_id="",
-                 table="",
-                 test_name="",
-                 test_callable=None,
+                 test_sql="",
                  expected_result=None,
+                 test_callable=None,
+                 test_name="",
                  *args, **kwargs):
 
         super(DataQualityOperator, self).__init__(*args, **kwargs)
         self.conn_id = conn_id
-        self.table = table
-        self.test_name = test_name
-        self.test_callable = test_callable
+        self.test_sql = test_sql
         self.expected_result = expected_result
+        self.test_callable = test_callable
+        self.test_name = test_name
 
 
     def execute(self, context):
@@ -34,16 +34,16 @@ class DataQualityOperator(BaseOperator):
         db = PostgresHook(postgres_conn_id=self.conn_id)
         
         # check test params & input data 
-        if self.table=="":
-            logging.info("No Table to test {self.test_name}")
+        if self.test_sql=="":
+            logging.info(f"No SQL for {self.test_name} test")
             
         if not self.test_callable or not self.expected_result:
             logging.info(f"Test call or expected result for {self.test_name} unavailable")
         
         # Run test and Check result
         # Raise error or Log success 
-        result = self.test_callable(db, self.table)
-        if result is not self.expected_result:
-            raise ValueError(f"Data quality check {self.test_name} on table {self.table} failed.")
+        result = self.test_callable(db, self.test_sql, self.expected_result)
+        if not result:
+            raise ValueError(f"Data quality check {self.test_name} failed.")
         
-        logging.info(f"Data quality check {self.test_name} on table {self.table} passed.")
+        logging.info(f"Data quality check {self.test_name} passed.")

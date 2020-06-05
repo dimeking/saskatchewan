@@ -49,7 +49,7 @@ Build a Data Pipeline with Apache Airflow using custom subdags & operators  to p
 ##### Facts Table
 - songplays
 
-#### GraphView
+##### GraphView
 
 ![alt text](graphview.png "GraphView")
 

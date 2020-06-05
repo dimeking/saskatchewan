@@ -25,7 +25,7 @@ def get_load_dim_dag(
         **kwargs
     )
     
-    action = 'Append data to' if append else 'Create data in'
+    action = 'Append data to' if append else 'Populate data in'
     logging.info(f"{action} {table} dimension table")
 
     # Drop Table if append mode is not enabled

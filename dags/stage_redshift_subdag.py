@@ -28,7 +28,7 @@ def get_stage_redshift_dag(
         **kwargs
     )
 
-    action = 'Append data to' if append else 'Create data in'
+    action = 'Append data to' if append else 'Copy data to'
     logging.info(f"{action} {table} table")
 
     # Drop Table if append mode is not enabled
